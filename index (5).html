@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>welcome to my g@l3ri4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #fff; color: #000;
+    font-family: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* fotos a pantalla completa, una encima de otra */
+  #stage { position: fixed; inset: 0; background: #fff; }
+  .slide {
+    position: absolute; inset: 0;
+    opacity: 0; transition: opacity .45s ease;
+  }
+  .slide.on { opacity: 1; }
+  .slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .slide .ph {
+    width: 100%; height: 100%; display: grid; place-items: center;
+    background: #f3f3f3; color: #8a8a8a; font-size: .9rem; padding: 24px; text-align: center;
+  }
+
+  /* texto sobre la foto */
+  .ui { position: fixed; z-index: 5; color: #fff; text-shadow: 0 1px 12px rgba(0,0,0,.45); pointer-events: none; }
+  #title { top: calc(20px + env(safe-area-inset-top, 0px)); left: 24px; font-weight: 500; letter-spacing: -0.01em; font-size: 1rem; }
+  #now { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 24px; right: 24px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; font-size: .95rem; }
+  #now small { display: block; opacity: .85; font-size: .85rem; }
+  #dots { display: flex; gap: 6px; }
+  #dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.45); transition: background .2s, transform .2s; }
+  #dots i.on { background: #fff; transform: scale(1.5); }
+
+  #mute {
+    position: fixed; z-index: 6; top: calc(14px + env(safe-area-inset-top, 0px)); right: 16px;
+    background: rgba(255,255,255,.9); color: #000; border: 0; border-radius: 999px;
+    padding: 8px 16px; font: inherit; font-size: .85rem; cursor: pointer; display: none;
+  }
+  #mute:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
+
+  /* pantalla de entrada */
+  #intro {
+    position: fixed; inset: 0; z-index: 10; background: #fff;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+    padding: 24px; cursor: pointer; transition: opacity .5s;
+  }
+  #intro.out { opacity: 0; pointer-events: none; }
+  #intro h1 { font-weight: 500; font-size: clamp(1.4rem, 5vw, 2.4rem); letter-spacing: -0.02em; margin: 0 0 10px; }
+  #intro p { margin: 0; color: #8a8a8a; font-size: .95rem; max-width: 40ch; }
+
+  @media (prefers-reduced-motion: reduce) { .slide, #intro { transition: none; } }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<div class="ui" id="title">welcome to my g@l3ri4</div>
+<div class="ui" id="now">
+  <div><span id="np-title"></span><small id="np-artist"></small></div>
+  <div id="dots"></div>
+</div>
+<button id="mute" type="button">Silenciar</button>
+
+<div id="intro" role="button" tabindex="0">
+  <h1>welcome to my g@l3ri4</h1>
+  <p>Toca o haz clic para entrar. Mueve el mouse o desliza el dedo por la pantalla para cambiar de foto y de canción.</p>
+</div>
+
+<script>
+  /* ============================================================
+     EDITA ESTA LISTA: una entrada por foto.
+     La pantalla se divide en franjas verticales, una por foto,
+     en este mismo orden (de izquierda a derecha).
+     ============================================================ */
+  const FOTOS = [
+    { foto: "fotos/foto1.jpg", cancion: "musica/cancion1.mp3", titulo: "Foto 1", artista: "Canción 1" },
+    { foto: "fotos/foto2.jpg", cancion: "musica/cancion2.mp3", titulo: "Foto 2", artista: "Canción 2" },
+    { foto: "fotos/foto3.jpg", cancion: "musica/cancion3.mp3", titulo: "Foto 3", artista: "Canción 3" },
+    { foto: "fotos/foto4.jpg", cancion: "musica/cancion4.mp3", titulo: "Foto 4", artista: "Canción 4" },
+    { foto: "fotos/foto5.jpg", cancion: "musica/cancion5.mp3", titulo: "Foto 5", artista: "Canción 5" },
+    { foto: "fotos/foto6.jpg", cancion: "musica/cancion6.mp3", titulo: "Foto 6", artista: "Canción 6" }
+  ];
+
+  const stage = document.getElementById("stage");
+  const intro = document.getElementById("intro");
+  const npTitle = document.getElementById("np-title");
+  const npArtist = document.getElementById("np-artist");
+  const dotsBox = document.getElementById("dots");
+  const muteBtn = document.getElementById("mute");
+
+  const slides = [], dots = [];
+  FOTOS.forEach((f, i) => {
+    const s = document.createElement("div");
+    s.className = "slide";
+    const img = new Image();
+    img.src = f.foto; img.alt = f.titulo; img.draggable = false;
+    img.onerror = () => {
+      const ph = document.createElement("div");
+      ph.className = "ph";
+      ph.textContent = "Falta la imagen: " + f.foto;
+      img.replaceWith(ph);
+    };
+    s.appendChild(img);
+    stage.appendChild(s);
+    slides.push(s);
+    const d = document.createElement("i");
+    dotsBox.appendChild(d); dots.push(d);
+  });
+
+  const audio = new Audio();
+  audio.loop = true;
+  let current = -1, entered = false, muted = false, audioTimer = null, lastX = 0;
+
+  function indexFromX(x) {
+    const i = Math.floor((x / window.innerWidth) * FOTOS.length);
+    return Math.max(0, Math.min(FOTOS.length - 1, i));
+  }
+
+  function show(i) {
+    if (i === current) return;
+    current = i;
+    slides.forEach((s, k) => s.classList.toggle("on", k === i));
+    dots.forEach((d, k) => d.classList.toggle("on", k === i));
+    npTitle.textContent = FOTOS[i].titulo;
+    npArtist.textContent = FOTOS[i].artista || "";
+    // la canción cambia después de un instante, para no cargar
+    // todas las canciones cuando pasas el mouse muy rápido
+    clearTimeout(audioTimer);
+    audioTimer = setTimeout(() => playSong(i), 150);
+  }
+
+  function playSong(i) {
+    audio.src = FOTOS[i].cancion;
+    audio.muted = muted;
+    audio.play().catch(() => {
+      npArtist.textContent = "No encuentro el audio: " + FOTOS[i].cancion;
+    });
+  }
+
+  function move(x) { lastX = x; if (entered) show(indexFromX(x)); }
+
+  window.addEventListener("pointermove", e => move(e.clientX));
+  window.addEventListener("pointerdown", e => move(e.clientX));
+
+  window.addEventListener("keydown", e => {
+    if (!entered) return;
+    if (e.key === "ArrowRight") show(Math.min(FOTOS.length - 1, current + 1));
+    if (e.key === "ArrowLeft") show(Math.max(0, current - 1));
+  });
+
+  function enter(e) {
+    if (entered) return;
+    entered = true;
+    intro.classList.add("out");
+    muteBtn.style.display = "block";
+    const x = (e && e.clientX !== undefined) ? e.clientX : lastX || window.innerWidth / 2;
+    const i = indexFromX(x);
+    current = -1;
+    show(i);
+    // el primer play() debe ocurrir dentro del clic/toque (regla de los navegadores)
+    clearTimeout(audioTimer);
+    playSong(i);
+  }
+  intro.addEventListener("click", enter);
+  intro.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") enter(); });
+
+  muteBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    muted = !muted;
+    audio.muted = muted;
+    muteBtn.textContent = muted ? "Activar sonido" : "Silenciar";
+  });
+  muteBtn.addEventListener("pointerdown", e => e.stopPropagation());
+</script>
+</body>
+</html>
