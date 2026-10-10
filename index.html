@@ -45,15 +45,16 @@
      en tus líneas, no pasa nada: se ignoran.)
      ============================================================ */
   const FOTOS = [
-    { foto: "fotos/si.jpg", titulo: "Foto 1" },
-    { foto: "fotos/waaa.jpg", titulo: "Foto 2" },
-    { foto: "fotos/wi.JPEG", titulo: "Foto 3" },
-    { foto: "fotos/wu.jpg", titulo: "Foto 4" },
-    { foto: "fotos/yay.jpg", titulo: "Foto 5" }
+    { foto: "fotos/foto1.jpg", titulo: "Foto 1" },
+    { foto: "fotos/foto2.jpg", titulo: "Foto 2" },
+    { foto: "fotos/foto3.jpg", titulo: "Foto 3" },
+    { foto: "fotos/foto4.jpg", titulo: "Foto 4" },
+    { foto: "fotos/foto5.jpg", titulo: "Foto 5" },
+    { foto: "fotos/foto6.jpg", titulo: "Foto 6" }
   ];
 
-  const BRUSH = 0.13;      // tamaño del pincel (proporción de la pantalla)
-  const THRESHOLD = 0.55;  // cuánto hay que pintar para pasar a la siguiente foto
+  const BRUSH = 0.085;      // tamaño del pincel (proporción de la pantalla)
+  const THRESHOLD = 0.95;  // cuánto hay que pintar para pasar a la siguiente foto
 
   const canvas = document.getElementById("c");
   const ctx = canvas.getContext("2d");
@@ -116,12 +117,12 @@
     W = window.innerWidth; H = window.innerHeight;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-    radius = Math.max(70, Math.min(W, H) * BRUSH);
+    radius = Math.max(48, Math.min(W, H) * BRUSH);
     resetCover();
   }
 
   function mark(x, y) {
-    const r = radius * 0.7;
+    const r = radius * 0.85;
     const x0 = Math.max(0, Math.floor((x - r) / CELL)), x1 = Math.min(gw - 1, Math.floor((x + r) / CELL));
     const y0 = Math.max(0, Math.floor((y - r) / CELL)), y1 = Math.min(gh - 1, Math.floor((y + r) / CELL));
     for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) {
@@ -151,11 +152,12 @@
     finishing = true;
     const start = performance.now();
     (function step(now) {
-      const a = Math.min(1, (now - start) / 400);
+      const p = Math.min(1, (now - start) / 900);
+      const a = p * p * (3 - 2 * p);   // entrada y salida suaves
       ctx.globalAlpha = a;
       ctx.drawImage(cover(next), 0, 0);
       ctx.globalAlpha = 1;
-      if (a < 1) return requestAnimationFrame(step);
+      if (p < 1) return requestAnimationFrame(step);
       base = next; next = (next + 1) % n;
       const keep = cache[base];
       cache = {}; cache[base] = keep;
