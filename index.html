@@ -11,175 +11,180 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0; height: 100%; overflow: hidden;
-    background: #fff; color: #000;
+    background: #fff; color: #fff;
     font-family: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
     touch-action: none;
     -webkit-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
-
-  /* fotos a pantalla completa, una encima de otra */
-  #stage { position: fixed; inset: 0; background: #fff; }
-  .slide {
-    position: absolute; inset: 0;
-    opacity: 0; transition: opacity .45s ease;
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .ui { position: fixed; z-index: 5; pointer-events: none; text-shadow: 0 1px 12px rgba(0,0,0,.5); }
+  #title { top: calc(20px + env(safe-area-inset-top, 0px)); left: 24px; font-weight: 500; font-size: 1rem; letter-spacing: -0.01em; }
+  #now {
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 24px; right: 24px;
+    display: flex; justify-content: space-between; font-size: .95rem;
   }
-  .slide.on { opacity: 1; }
-  .slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .slide .ph {
-    width: 100%; height: 100%; display: grid; place-items: center;
-    background: #f3f3f3; color: #8a8a8a; font-size: .9rem; padding: 24px; text-align: center;
+  #hint {
+    top: 50%; left: 0; right: 0; text-align: center; font-size: .95rem;
+    transform: translateY(-50%); transition: opacity .6s;
   }
-
-  /* texto sobre la foto */
-  .ui { position: fixed; z-index: 5; color: #fff; text-shadow: 0 1px 12px rgba(0,0,0,.45); pointer-events: none; }
-  #title { top: calc(20px + env(safe-area-inset-top, 0px)); left: 24px; font-weight: 500; letter-spacing: -0.01em; font-size: 1rem; }
-  #now { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 24px; right: 24px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; font-size: .95rem; }
-  #now small { display: block; opacity: .85; font-size: .85rem; }
-  #dots { display: flex; gap: 6px; }
-  #dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.45); transition: background .2s, transform .2s; }
-  #dots i.on { background: #fff; transform: scale(1.5); }
-
-  #mute {
-    position: fixed; z-index: 6; top: calc(14px + env(safe-area-inset-top, 0px)); right: 16px;
-    background: rgba(255,255,255,.9); color: #000; border: 0; border-radius: 999px;
-    padding: 8px 16px; font: inherit; font-size: .85rem; cursor: pointer; display: none;
-  }
-  #mute:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
-
-  /* pantalla de entrada */
-  #intro {
-    position: fixed; inset: 0; z-index: 10; background: #fff;
-    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
-    padding: 24px; cursor: pointer; transition: opacity .5s;
-  }
-  #intro.out { opacity: 0; pointer-events: none; }
-  #intro h1 { font-weight: 500; font-size: clamp(1.4rem, 5vw, 2.4rem); letter-spacing: -0.02em; margin: 0 0 10px; }
-  #intro p { margin: 0; color: #8a8a8a; font-size: .95rem; max-width: 40ch; }
-
-  @media (prefers-reduced-motion: reduce) { .slide, #intro { transition: none; } }
+  #hint.gone { opacity: 0; }
 </style>
 </head>
 <body>
 
-<div id="stage"></div>
-
+<canvas id="c"></canvas>
 <div class="ui" id="title">welcome to my g@l3ri4</div>
-<div class="ui" id="now">
-  <div><span id="np-title"></span><small id="np-artist"></small></div>
-  <div id="dots"></div>
-</div>
-<button id="mute" type="button">Silenciar</button>
-
-<div id="intro" role="button" tabindex="0">
-  <h1>welcome to my g@l3ri4</h1>
-  <p>Toca o haz clic para entrar. Mueve el mouse o desliza el dedo por la pantalla para cambiar de foto y de canción.</p>
-</div>
+<div class="ui" id="hint">mueve el mouse o desliza el dedo</div>
+<div class="ui" id="now"><span id="cap"></span><span id="count"></span></div>
 
 <script>
   /* ============================================================
-     EDITA ESTA LISTA: una entrada por foto.
-     La pantalla se divide en franjas verticales, una por foto,
-     en este mismo orden (de izquierda a derecha).
+     EDITA ESTA LISTA: una línea por foto, en el orden en que
+     se van revelando. (Si todavía tienes "cancion" o "artista"
+     en tus líneas, no pasa nada: se ignoran.)
      ============================================================ */
   const FOTOS = [
-    { foto: "fotos/wi.JPEG", cancion: "musica/cancion1.mp3", titulo: "Foto 1", artista: "Canción 1" },
-    { foto: "fotos/si.jpg", cancion: "musica/cancion2.mp3", titulo: "Foto 2", artista: "Canción 2" },
-    { foto: "fotos/waaa.jpg", cancion: "musica/cancion3.mp3", titulo: "Foto 3", artista: "Canción 3" },
-    { foto: "fotos/wu.jpg", cancion: "musica/cancion4.mp3", titulo: "Foto 4", artista: "Canción 4" },
-    { foto: "fotos/yay.jpg", cancion: "musica/cancion5.mp3", titulo: "Foto 5", artista: "Canción 5" },
+    { foto: "fotos/si.jpg", titulo: "Foto 1" },
+    { foto: "fotos/waaa.jpg", titulo: "Foto 2" },
+    { foto: "fotos/wi.jpg", titulo: "Foto 3" },
+    { foto: "fotos/wu.jpg", titulo: "Foto 4" },
+    { foto: "fotos/yay.jpg", titulo: "Foto 5" }
   ];
 
-  const stage = document.getElementById("stage");
-  const intro = document.getElementById("intro");
-  const npTitle = document.getElementById("np-title");
-  const npArtist = document.getElementById("np-artist");
-  const dotsBox = document.getElementById("dots");
-  const muteBtn = document.getElementById("mute");
+  const BRUSH = 0.13;      // tamaño del pincel (proporción de la pantalla)
+  const THRESHOLD = 0.55;  // cuánto hay que pintar para pasar a la siguiente foto
 
-  const slides = [], dots = [];
-  FOTOS.forEach((f, i) => {
-    const s = document.createElement("div");
-    s.className = "slide";
-    const img = new Image();
-    img.src = f.foto; img.alt = f.titulo; img.draggable = false;
-    img.onerror = () => {
-      const ph = document.createElement("div");
-      ph.className = "ph";
-      ph.textContent = "Falta la imagen: " + f.foto;
-      img.replaceWith(ph);
-    };
-    s.appendChild(img);
-    stage.appendChild(s);
-    slides.push(s);
-    const d = document.createElement("i");
-    dotsBox.appendChild(d); dots.push(d);
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const capEl = document.getElementById("cap");
+  const countEl = document.getElementById("count");
+  const hint = document.getElementById("hint");
+  const tmp = document.createElement("canvas");
+  const t = tmp.getContext("2d");
+
+  const n = FOTOS.length;
+  const imgs = FOTOS.map(f => {
+    const im = new Image();
+    im.ok = false;
+    im.onload = () => { im.ok = true; resetCover(); };
+    im.onerror = () => { im.ok = false; resetCover(); };
+    im.src = f.foto;
+    return im;
   });
 
-  const audio = new Audio();
-  audio.loop = true;
-  let current = -1, entered = false, muted = false, audioTimer = null, lastX = 0;
+  let W, H, dpr, radius;
+  let base = 0, next = n > 1 ? 1 : 0;
+  let cache = {};
+  let grid, gw, gh, filled, cells;
+  let last = null, finishing = false;
+  const CELL = 36;
 
-  function indexFromX(x) {
-    const i = Math.floor((x / window.innerWidth) * FOTOS.length);
-    return Math.max(0, Math.min(FOTOS.length - 1, i));
+  function makeCover(i) {
+    const c = document.createElement("canvas");
+    c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+    const g = c.getContext("2d");
+    const im = imgs[i];
+    if (im.ok && im.naturalWidth) {
+      const s = Math.max(c.width / im.naturalWidth, c.height / im.naturalHeight);
+      const w = im.naturalWidth * s, h = im.naturalHeight * s;
+      g.drawImage(im, (c.width - w) / 2, (c.height - h) / 2, w, h);
+    } else {
+      g.fillStyle = "#f0f0f0"; g.fillRect(0, 0, c.width, c.height);
+      g.fillStyle = "#8a8a8a";
+      g.font = (14 * dpr) + "px Inter, system-ui, sans-serif";
+      g.textAlign = "center";
+      g.fillText("Falta la imagen: " + FOTOS[i].foto, c.width / 2, c.height / 2);
+    }
+    return c;
+  }
+  function cover(i) { return cache[i] || (cache[i] = makeCover(i)); }
+
+  function resetGrid() {
+    gw = Math.ceil(W / CELL); gh = Math.ceil(H / CELL);
+    cells = gw * gh; grid = new Uint8Array(cells); filled = 0;
+  }
+  function paintBase() {
+    ctx.globalAlpha = 1;
+    ctx.drawImage(cover(base), 0, 0);
+    capEl.textContent = FOTOS[base].titulo || "";
+    countEl.textContent = (base + 1) + " / " + n;
+  }
+  function resetCover() { cache = {}; paintBase(); resetGrid(); }
+
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    radius = Math.max(70, Math.min(W, H) * BRUSH);
+    resetCover();
   }
 
-  function show(i) {
-    if (i === current) return;
-    current = i;
-    slides.forEach((s, k) => s.classList.toggle("on", k === i));
-    dots.forEach((d, k) => d.classList.toggle("on", k === i));
-    npTitle.textContent = FOTOS[i].titulo;
-    npArtist.textContent = FOTOS[i].artista || "";
-    // la canción cambia después de un instante, para no cargar
-    // todas las canciones cuando pasas el mouse muy rápido
-    clearTimeout(audioTimer);
-    audioTimer = setTimeout(() => playSong(i), 150);
+  function mark(x, y) {
+    const r = radius * 0.7;
+    const x0 = Math.max(0, Math.floor((x - r) / CELL)), x1 = Math.min(gw - 1, Math.floor((x + r) / CELL));
+    const y0 = Math.max(0, Math.floor((y - r) / CELL)), y1 = Math.min(gh - 1, Math.floor((y + r) / CELL));
+    for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) {
+      const dx = (gx + 0.5) * CELL - x, dy = (gy + 0.5) * CELL - y;
+      const k = gy * gw + gx;
+      if (dx * dx + dy * dy <= r * r && !grid[k]) { grid[k] = 1; filled++; }
+    }
   }
 
-  function playSong(i) {
-    audio.src = FOTOS[i].cancion;
-    audio.muted = muted;
-    audio.play().catch(() => {
-      npArtist.textContent = "No encuentro el audio: " + FOTOS[i].cancion;
-    });
+  function stamp(x, y) {
+    const r = radius * dpr, size = Math.ceil(r * 2);
+    if (tmp.width !== size) { tmp.width = size; tmp.height = size; }
+    const px = x * dpr - r, py = y * dpr - r;
+    t.globalCompositeOperation = "source-over";
+    t.clearRect(0, 0, size, size);
+    t.drawImage(cover(next), px, py, size, size, 0, 0, size, size);
+    t.globalCompositeOperation = "destination-in";
+    const g = t.createRadialGradient(r, r, r * 0.35, r, r, r);
+    g.addColorStop(0, "rgba(0,0,0,1)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    t.fillStyle = g; t.fillRect(0, 0, size, size);
+    ctx.drawImage(tmp, px, py);
+    mark(x, y);
   }
 
-  function move(x) { lastX = x; if (entered) show(indexFromX(x)); }
-
-  window.addEventListener("pointermove", e => move(e.clientX));
-  window.addEventListener("pointerdown", e => move(e.clientX));
-
-  window.addEventListener("keydown", e => {
-    if (!entered) return;
-    if (e.key === "ArrowRight") show(Math.min(FOTOS.length - 1, current + 1));
-    if (e.key === "ArrowLeft") show(Math.max(0, current - 1));
-  });
-
-  function enter(e) {
-    if (entered) return;
-    entered = true;
-    intro.classList.add("out");
-    muteBtn.style.display = "block";
-    const x = (e && e.clientX !== undefined) ? e.clientX : lastX || window.innerWidth / 2;
-    const i = indexFromX(x);
-    current = -1;
-    show(i);
-    // el primer play() debe ocurrir dentro del clic/toque (regla de los navegadores)
-    clearTimeout(audioTimer);
-    playSong(i);
+  function finish() {
+    finishing = true;
+    const start = performance.now();
+    (function step(now) {
+      const a = Math.min(1, (now - start) / 400);
+      ctx.globalAlpha = a;
+      ctx.drawImage(cover(next), 0, 0);
+      ctx.globalAlpha = 1;
+      if (a < 1) return requestAnimationFrame(step);
+      base = next; next = (next + 1) % n;
+      const keep = cache[base];
+      cache = {}; cache[base] = keep;
+      resetGrid(); paintBase();
+      finishing = false; last = null;
+    })(start);
   }
-  intro.addEventListener("click", enter);
-  intro.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") enter(); });
 
-  muteBtn.addEventListener("click", e => {
-    e.stopPropagation();
-    muted = !muted;
-    audio.muted = muted;
-    muteBtn.textContent = muted ? "Activar sonido" : "Silenciar";
-  });
-  muteBtn.addEventListener("pointerdown", e => e.stopPropagation());
+  function paint(x, y) {
+    if (finishing || n < 2) return;
+    if (!hint.classList.contains("gone")) hint.classList.add("gone");
+    if (last) {
+      const dx = x - last.x, dy = y - last.y;
+      const dist = Math.hypot(dx, dy), step = radius * 0.25;
+      const steps = Math.max(1, Math.floor(dist / step));
+      for (let s = 1; s <= steps; s++) stamp(last.x + dx * s / steps, last.y + dy * s / steps);
+    } else {
+      stamp(x, y);
+    }
+    last = { x, y };
+    if (filled / cells >= THRESHOLD) finish();
+  }
+
+  window.addEventListener("pointermove", e => paint(e.clientX, e.clientY));
+  window.addEventListener("pointerdown", e => { last = null; paint(e.clientX, e.clientY); });
+  window.addEventListener("pointerup", () => { last = null; });
+  window.addEventListener("pointerleave", () => { last = null; });
+  window.addEventListener("resize", resize);
+  resize();
 </script>
 </body>
 </html>
