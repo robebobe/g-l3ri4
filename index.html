@@ -48,25 +48,34 @@
 <div class="ui" id="title">welcome to my g@l3ri4</div>
 <div class="ui" id="hint">draw with your finger</div>
 <div class="ui" id="cap"></div>
+<div id="err" style="position:fixed;z-index:9;left:12px;right:12px;top:60px;background:#fff;color:#c00;font:13px/1.4 monospace;padding:10px;display:none;white-space:pre-wrap"></div>
 <button id="next" type="button">next photo →</button>
 
 <script>
+  window.addEventListener("error", e => {
+    const b = document.getElementById("err");
+    if (b) { b.style.display = "block"; b.textContent = "Error: " + e.message + " (línea " + e.lineno + ")"; }
+  });
   /* ============================================================
-     EDITA ESTA LISTA: una línea por foto.
-     La primera es el fondo. Las demás son tu pincel: pintas con
-     una foto, y con "next photo" (o un toque / clic rápido)
-     cambias de pincel cuando quieras.
-     (Si tienes "cancion" o "artista" en tus líneas, se ignoran.)
+     AQUÍ VAN TUS FOTOS: una por línea, sin comas ni llaves.
+     La primera es el fondo; las demás son tu pincel.
+     Para añadir una foto, agrega una línea nueva con su ruta.
+     (Opcional: después de la ruta puedes poner " | Título".)
      ============================================================ */
-  const FOTOS = [
-    { foto: "fotos/si.jpg", titulo: "Foto 1" },
-    { foto: "fotos/monos.jpg", titulo: "Foto 2" },
-    { foto: "fotos/wu.jpg", titulo: "Foto 3" },
-    { foto: "fotos/yay.jpg", titulo: "Foto 4" },
-    { foto: "fotos/waaa.jpg", titulo: "Foto 5" },
-    { foto: "fotos/portal.jpg", titulo: "Foto 6" },
-    { foto: "fotos/wi.JPEG", titulo: "Foto 7" }
-  ];
+  const LISTA = `
+fotos/si.jpg
+fotos/monos.jpg
+fotos/wu.jpg
+fotos/yay.jpg
+fotos/waaa.jpg
+fotos/portal.jpg
+fotos/wi.JPEG
+`;
+
+  const FOTOS = LISTA.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+    const [foto, titulo] = l.split("|").map(x => x.trim());
+    return { foto, titulo: titulo || foto.replace(/^.*\//, "").replace(/\.[^.]+$/, "") };
+  });
 
   const BRUSH = 0.085;   // tamaño del pincel (proporción de la pantalla)
 
