@@ -20,29 +20,43 @@
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   .ui { position: fixed; z-index: 5; pointer-events: none; text-shadow: 0 1px 12px rgba(0,0,0,.5); }
   #title { top: calc(20px + env(safe-area-inset-top, 0px)); left: 24px; font-weight: 500; font-size: 1rem; letter-spacing: -0.01em; }
-  #now {
-    bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 24px; right: 24px;
-    display: flex; justify-content: space-between; font-size: .95rem;
-  }
+  #cap { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 24px; font-size: .95rem; }
   #hint {
-    top: 50%; left: 0; right: 0; text-align: center; font-size: .95rem;
-    transform: translateY(-50%); transition: opacity .6s;
+    top: 50%; left: 0; right: 0; text-align: center; font-size: 1.4rem; font-weight: 500;
+    letter-spacing: -0.01em; transform: translateY(-50%); transition: opacity .6s;
   }
   #hint.gone { opacity: 0; }
+  #next {
+    position: fixed; z-index: 6;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)); right: 12px;
+    background: none; border: 0; color: #fff; font: inherit; font-size: .95rem;
+    padding: 12px; cursor: pointer; text-shadow: 0 1px 12px rgba(0,0,0,.5);
+  }
+  #next:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  /* vista previa del pincel (solo con mouse) */
+  #cursor {
+    position: fixed; z-index: 4; left: 0; top: 0; pointer-events: none; display: none;
+    border-radius: 50%; border: 2px solid #fff; background-size: cover; background-position: center;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.2);
+  }
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
+<div id="cursor"></div>
 <div class="ui" id="title">welcome to my g@l3ri4</div>
-<div class="ui" id="hint">mueve el mouse o desliza el dedo</div>
-<div class="ui" id="now"><span id="cap"></span><span id="count"></span></div>
+<div class="ui" id="hint">draw with your finger</div>
+<div class="ui" id="cap"></div>
+<button id="next" type="button">next photo →</button>
 
 <script>
   /* ============================================================
-     EDITA ESTA LISTA: una línea por foto, en el orden en que
-     se van revelando. (Si todavía tienes "cancion" o "artista"
-     en tus líneas, no pasa nada: se ignoran.)
+     EDITA ESTA LISTA: una línea por foto.
+     La primera es el fondo. Las demás son tu pincel: pintas con
+     una foto, y con "next photo" (o un toque / clic rápido)
+     cambias de pincel cuando quieras.
+     (Si tienes "cancion" o "artista" en tus líneas, se ignoran.)
      ============================================================ */
   const FOTOS = [
     { foto: "fotos/si.jpg", titulo: "Foto 1" },
@@ -50,18 +64,18 @@
     { foto: "fotos/wu.jpg", titulo: "Foto 3" },
     { foto: "fotos/yay.jpg", titulo: "Foto 4" },
     { foto: "fotos/waaa.jpg", titulo: "Foto 5" },
-    { foto: "fotos/portal.jpg", titulo: "Foto 6" },
-    { foto: "fotos/wi.JPEG", titulo: "Foto 7" },
+    { foto: "fotos/portal.jpg", titulo: "Foto 6" }
+    { foto: "fotos/wi.JPEG", titulo: "Foto 7" }
   ];
 
-  const BRUSH = 0.085;      // tamaño del pincel (proporción de la pantalla)
-  const THRESHOLD = 0.95;  // cuánto hay que pintar para pasar a la siguiente foto
+  const BRUSH = 0.085;   // tamaño del pincel (proporción de la pantalla)
 
   const canvas = document.getElementById("c");
   const ctx = canvas.getContext("2d");
   const capEl = document.getElementById("cap");
-  const countEl = document.getElementById("count");
   const hint = document.getElementById("hint");
+  const nextBtn = document.getElementById("next");
+  const cursorEl = document.getElementById("cursor");
   const tmp = document.createElement("canvas");
   const t = tmp.getContext("2d");
 
@@ -69,18 +83,17 @@
   const imgs = FOTOS.map(f => {
     const im = new Image();
     im.ok = false;
-    im.onload = () => { im.ok = true; resetCover(); };
-    im.onerror = () => { im.ok = false; resetCover(); };
+    im.onload = () => { im.ok = true; cache = {}; if (!painted) draw0(); };
+    im.onerror = () => { im.ok = false; cache = {}; if (!painted) draw0(); };
     im.src = f.foto;
     return im;
   });
 
   let W, H, dpr, radius;
-  let base = 0, next = n > 1 ? 1 : 0;
+  let brush = n > 1 ? 1 : 0;
   let cache = {};
-  let grid, gw, gh, filled, cells;
-  let last = null, finishing = false;
-  const CELL = 36;
+  let last = null, painted = false;
+  let down = null;   // para distinguir un toque rápido de un arrastre
 
   function makeCover(i) {
     const c = document.createElement("canvas");
@@ -102,35 +115,23 @@
   }
   function cover(i) { return cache[i] || (cache[i] = makeCover(i)); }
 
-  function resetGrid() {
-    gw = Math.ceil(W / CELL); gh = Math.ceil(H / CELL);
-    cells = gw * gh; grid = new Uint8Array(cells); filled = 0;
+  function draw0() { ctx.globalAlpha = 1; ctx.drawImage(cover(0), 0, 0); }
+
+  function setBrush(i) {
+    brush = (i + n) % n;
+    capEl.textContent = FOTOS[brush].titulo || "";
+    cursorEl.style.backgroundImage = "url('" + FOTOS[brush].foto + "')";
+    last = null;
   }
-  function paintBase() {
-    ctx.globalAlpha = 1;
-    ctx.drawImage(cover(base), 0, 0);
-    capEl.textContent = FOTOS[base].titulo || "";
-    countEl.textContent = (base + 1) + " / " + n;
-  }
-  function resetCover() { cache = {}; paintBase(); resetGrid(); }
 
   function resize() {
     W = window.innerWidth; H = window.innerHeight;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     radius = Math.max(48, Math.min(W, H) * BRUSH);
-    resetCover();
-  }
-
-  function mark(x, y) {
-    const r = radius * 0.85;
-    const x0 = Math.max(0, Math.floor((x - r) / CELL)), x1 = Math.min(gw - 1, Math.floor((x + r) / CELL));
-    const y0 = Math.max(0, Math.floor((y - r) / CELL)), y1 = Math.min(gh - 1, Math.floor((y + r) / CELL));
-    for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) {
-      const dx = (gx + 0.5) * CELL - x, dy = (gy + 0.5) * CELL - y;
-      const k = gy * gw + gx;
-      if (dx * dx + dy * dy <= r * r && !grid[k]) { grid[k] = 1; filled++; }
-    }
+    const d = Math.round(radius * 1.3);
+    cursorEl.style.width = cursorEl.style.height = d + "px";
+    cache = {}; painted = false; draw0();
   }
 
   function stamp(x, y) {
@@ -139,36 +140,18 @@
     const px = x * dpr - r, py = y * dpr - r;
     t.globalCompositeOperation = "source-over";
     t.clearRect(0, 0, size, size);
-    t.drawImage(cover(next), px, py, size, size, 0, 0, size, size);
+    t.drawImage(cover(brush), px, py, size, size, 0, 0, size, size);
     t.globalCompositeOperation = "destination-in";
     const g = t.createRadialGradient(r, r, r * 0.35, r, r, r);
     g.addColorStop(0, "rgba(0,0,0,1)");
     g.addColorStop(1, "rgba(0,0,0,0)");
     t.fillStyle = g; t.fillRect(0, 0, size, size);
     ctx.drawImage(tmp, px, py);
-    mark(x, y);
-  }
-
-  function finish() {
-    finishing = true;
-    const start = performance.now();
-    (function step(now) {
-      const p = Math.min(1, (now - start) / 900);
-      const a = p * p * (3 - 2 * p);   // entrada y salida suaves
-      ctx.globalAlpha = a;
-      ctx.drawImage(cover(next), 0, 0);
-      ctx.globalAlpha = 1;
-      if (p < 1) return requestAnimationFrame(step);
-      base = next; next = (next + 1) % n;
-      const keep = cache[base];
-      cache = {}; cache[base] = keep;
-      resetGrid(); paintBase();
-      finishing = false; last = null;
-    })(start);
   }
 
   function paint(x, y) {
-    if (finishing || n < 2) return;
+    if (n < 2) return;
+    painted = true;
     if (!hint.classList.contains("gone")) hint.classList.add("gone");
     if (last) {
       const dx = x - last.x, dy = y - last.y;
@@ -179,15 +162,41 @@
       stamp(x, y);
     }
     last = { x, y };
-    if (filled / cells >= THRESHOLD) finish();
   }
 
-  window.addEventListener("pointermove", e => paint(e.clientX, e.clientY));
-  window.addEventListener("pointerdown", e => { last = null; paint(e.clientX, e.clientY); });
-  window.addEventListener("pointerup", () => { last = null; });
-  window.addEventListener("pointerleave", () => { last = null; });
+  const onButton = e => e.target.closest && e.target.closest("#next");
+
+  window.addEventListener("pointermove", e => {
+    if (onButton(e)) { cursorEl.style.display = "none"; return; }
+    if (e.pointerType === "mouse") {
+      cursorEl.style.display = "block";
+      cursorEl.style.transform = "translate(" + (e.clientX - radius * 0.65) + "px," + (e.clientY - radius * 0.65) + "px)";
+    }
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) down.moved = true;
+    paint(e.clientX, e.clientY);
+  });
+  window.addEventListener("pointerdown", e => {
+    if (onButton(e)) return;
+    last = null;
+    down = { x: e.clientX, y: e.clientY, moved: false };
+  });
+  window.addEventListener("pointerup", e => {
+    // un toque o clic rápido, sin arrastrar, cambia la foto-pincel
+    if (down && !down.moved && !onButton(e)) setBrush(brush + 1);
+    down = null; last = null;
+  });
+  window.addEventListener("pointercancel", () => { down = null; last = null; });
+  document.addEventListener("pointerleave", () => { cursorEl.style.display = "none"; last = null; });
+
+  nextBtn.addEventListener("click", () => setBrush(brush + 1));
+  window.addEventListener("keydown", e => {
+    if (e.key === "ArrowRight" || e.key === " ") setBrush(brush + 1);
+    if (e.key === "ArrowLeft") setBrush(brush - 1);
+  });
   window.addEventListener("resize", resize);
+
   resize();
+  setBrush(brush);
 </script>
 </body>
 </html>
